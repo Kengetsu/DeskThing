@@ -1,0 +1,59 @@
+app-id: io.github.itsriprod.DeskThing
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node20
+base: org.electronjs.Electron2.BaseApp
+base-version: '23.08'
+add-extensions:
+  org.freedesktop.Platform.ffmpeg-full:
+    version: '23.08'
+    directory: lib/ffmpeg
+    add-ld-path: .
+cleanup-commands:
+  - mkdir -p ${FLATPAK_DEST}/lib/ffmpeg
+command: deskthing
+separate-locales: false
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --share=network
+  - --device=all
+  - --filesystem=home
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.secrets
+build-options:
+  append-path: /usr/lib/sdk/node20/bin
+  env:
+    NPM_CONFIG_LOGLEVEL: info
+    ELECTRON_IS_DEV: 0
+modules:
+  - name: deskthing
+    buildsystem: simple
+    build-options:
+      env:
+        XDG_CACHE_HOME: /run/build/deskthing/flatpak-node/cache
+        npm_config_cache: /run/build/deskthing/flatpak-node/npm-cache
+        npm_config_offline: 'true'
+        ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        ELECTRON_OVERRIDE_DIST_PATH: /run/build/deskthing/flatpak-node/electron-dist
+    subdir: DeskThingServer
+    sources:
+      - type: git
+        url: https://github.com/ItsRiprod/DeskThing.git
+        tag: v0.11.6
+        commit: a110cc113e029773973e3b7469eef418a6e493ce
+      - generated-sources.json
+    build-commands:
+      - npm install --offline --ignore-scripts
+      - npm run postinstall --if-present
+      - jq '.build.linux.target="dir"' <<<$(<package.json) > package.json
+      - |
+        . ../flatpak-node/electron-builder-arch-args.sh
+        npm run build -- $ELECTRON_BUILDER_ARCH_ARGS --linux --dir
+      - cp -r dist/linux-unpacked /app/deskthing
+      - install -Dm755 /app/deskthing/deskthing /app/bin/deskthing
+      - install -Dm644 build/icon.png /app/share/icons/hicolor/256x256/apps/io.github.itsriprod.DeskThing.png
+      - install -Dm644 resources/deskthing.desktop /app/share/applications/io.github.itsriprod.DeskThing.desktop
