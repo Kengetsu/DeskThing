@@ -39,3 +39,7 @@ CommunityApps
 /DeskThingServer/docs
 DeskThingServer/.env.production
 DeskThingServer/src/main/config.json
+
+# Flatpak
+DeskThingServer/build/flatpak/.flatpak-builder
+DeskThingServer/build/flatpak/build
