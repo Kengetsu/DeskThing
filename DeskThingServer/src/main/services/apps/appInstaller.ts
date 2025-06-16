@@ -1,6 +1,6 @@
 console.log('[AppInst Service] Starting')
 // Types
-import { LOGGING_LEVELS, AppReleaseSingleMeta, App } from '@deskthing/types'
+import { LOGGING_LEVELS, AppReleaseSingleMeta, App, AppLatestJSONLatest } from '@deskthing/types'
 import { ProgressChannel, StagedAppManifest } from '@shared/types'
 
 // Utils
@@ -17,6 +17,7 @@ import { overwriteData } from '../files/dataFileService'
 import { storeProvider } from '@server/stores/storeProvider'
 import { progressBus } from '../events/progressBus'
 import { handleError } from '@server/utils/errorHandler'
+import { stageAppFileType } from '@shared/stores/appStore'
 
 interface ExecuteStagedFileType {
   overwrite?: boolean
@@ -171,7 +172,7 @@ export const executeStagedFile = async ({
 }
 
 /**
- * @depreciated - This is not needed as the run staged will use the already-extracted data
+ * @deprecated - This is not needed as the run staged will use the already-extracted data
  */
 export const findTempZipPath = async (
   tempPath: string,
@@ -219,17 +220,15 @@ export const findTempZipPath = async (
   throw new Error('No matching zip file found in temp directory')
 }
 
-const getTempZipPath = (tempPath, releaseMeta?: AppReleaseSingleMeta): string => {
+const getTempZipPath = (tempPath: string, releaseMeta?: AppLatestJSONLatest): string => {
   if (releaseMeta) {
-    const standardizedFileName = getStandardizedFilename(releaseMeta.id, releaseMeta.version)
+    const standardizedFileName = getStandardizedFilename(
+      releaseMeta.appManifest.id,
+      releaseMeta.appManifest.version
+    )
     return path.join(tempPath, standardizedFileName)
   }
   return path.join(tempPath, 'temp.zip')
-}
-
-export interface stageAppFileType {
-  filePath?: string
-  releaseMeta?: AppReleaseSingleMeta
 }
 
 /**
@@ -442,11 +441,7 @@ export const stageAppFile = async ({
       function: 'handleZipFromFile',
       source: 'appInstaller'
     })
-    progressBus.error(
-      ProgressChannel.FN_APP_INSTALL,
-      'Extraction failed!',
-      handleError(error)
-    )
+    progressBus.error(ProgressChannel.FN_APP_INSTALL, 'Extraction failed!', handleError(error))
   }
 
   progressBus.update(ProgressChannel.FN_APP_INSTALL, 'Getting Manifest...', 96)

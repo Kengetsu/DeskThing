@@ -11,12 +11,7 @@ export interface ClientStoreClass
   extends CacheableStore,
     EventEmitter<ClientStoreEvents>,
     StoreInterface {
-  getClient(): ClientManifest | null
-
-  /**
-   * @channel - {@link ProgressChannel.ST_CLIENT_INSTALL}
-   */
-  downloadLatestClient(): Promise<void>
+  getClient(): Promise<ClientManifest | null>
 
   /**
    * @channel - {@link ProgressChannel.ST_CLIENT_INSTALL}
@@ -28,7 +23,7 @@ export interface ClientStoreClass
    * @channel - {@link ProgressChannel.ST_CLIENT_DOWNLOAD}
    * @param url
    */
-  loadClientFromURL(url: string): Promise<void>
+  loadClientFromURL(url: string): Promise<ClientManifest | undefined>
 
   /**
    * @channel - {@link ProgressChannel.ST_CLIENT_REFRESH}

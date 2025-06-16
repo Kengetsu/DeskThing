@@ -9,7 +9,6 @@ import {
   DeviceToDeskthingData,
   LOGGING_LEVELS
 } from '@deskthing/types'
-import { Settings } from '@shared/types'
 import { SettingsStoreClass } from '@shared/stores/settingsStore'
 import { AppStoreClass } from '@shared/stores/appStore'
 import { PlatformStoreClass, PlatformStoreEvent } from '@shared/stores/platformStore'
@@ -70,9 +69,9 @@ export class MusicService implements MusicStoreClass {
       return
     }
 
-    if (refreshRate < 5) {
+    if (refreshRate < 5000) {
       Logger.log(LOGGING_LEVELS.WARN, `Refresh interval of ${refreshRate}s may impact performance`)
-      if (refreshRate < 1) {
+      if (refreshRate < 1000) {
         Logger.log(
           LOGGING_LEVELS.WARN,
           `Extremely low refresh interval (${refreshRate}s) could cause system issues`
@@ -92,7 +91,7 @@ export class MusicService implements MusicStoreClass {
     }
 
     Logger.log(LOGGING_LEVELS.LOG, `Setting playback location to ${source}`)
-    await this.settingsStore.updateSetting('playbackLocation', source)
+    await this.settingsStore.saveSetting('music_playbackLocation', source)
     this.currentApp = source
 
     // if (source === 'local') { TODO Native Local Audio
@@ -107,13 +106,13 @@ export class MusicService implements MusicStoreClass {
     const currentApp = await this.getPlaybackSource()
 
     if (!currentApp) {
-      Logger.debug(`No audio source app available`)
+      Logger.warn(`No audio source app available`)
       return
     }
 
     // Validate request data
     if (!songData.app || !songData.request || !songData.type) {
-      Logger.debug(`Invalid song data received: ${JSON.stringify(songData)}`)
+      Logger.warn(`Invalid song data received: ${JSON.stringify(songData)}`)
       return
     }
 
@@ -199,12 +198,7 @@ export class MusicService implements MusicStoreClass {
       await this.initialize()
       const cachedSong = this.songCache.getCurrentSong()
       if (cachedSong) {
-        await this.platformStore.sendDataToClient({
-          type: DESKTHING_DEVICE.MUSIC,
-          app: 'client',
-          payload: cachedSong,
-          clientId: client.clientId
-        })
+        await this.sendMusicToClient(client.clientId)
       }
     })
 
@@ -226,9 +220,16 @@ export class MusicService implements MusicStoreClass {
     })
 
     // Listen for settings changes
-    this.settingsStore.addListener((data) => {
-      this.initialize()
-      this.handleSettingsUpdate(data)
+    this.settingsStore.on('music_playbackLocation', async (data) => {
+      if (data && data !== this.currentApp) {
+        Logger.info(`Changing playback source: ${this.currentApp} → ${data}`)
+        this.currentApp = data
+        await this.refreshMusicData()
+      }
+    })
+
+    this.settingsStore.on('music_refreshInterval', async (data) => {
+      await this.updateRefreshInterval(data)
     })
 
     // Listen for song end events
@@ -290,14 +291,11 @@ export class MusicService implements MusicStoreClass {
         return
       }
 
+      Logger.debug(`Received request for song data from client ${data?.client?.clientId}`)
+
       const cachedSong = this.songCache.getCurrentSong()
       if (cachedSong) {
-        await this.platformStore.sendDataToClient({
-          type: DESKTHING_DEVICE.MUSIC,
-          app: 'client',
-          payload: cachedSong,
-          clientId: data.client.clientId
-        })
+        await this.sendMusicToClient(data.client.clientId)
       }
       return
     }
@@ -307,25 +305,27 @@ export class MusicService implements MusicStoreClass {
     }
   }
 
+  public async sendMusicToClient(clientId: string): Promise<void> {
+    const currentSong = this.songCache.getCurrentSong()
+    if (currentSong) {
+      await this.platformStore.sendDataToClient({
+        type: DESKTHING_DEVICE.MUSIC,
+        app: 'client',
+        payload: currentSong,
+        clientId
+      })
+    }
+  }
+
   private async initializeRefreshInterval(): Promise<void> {
     const settings = await this.settingsStore.getSettings()
     if (!settings) return
 
-    this.currentApp = settings.playbackLocation || 'none'
+    this.currentApp = settings.music_playbackLocation || 'none'
     Logger.debug(`Initializing current app to ${this.currentApp}`)
 
-    await this.updateRefreshInterval(settings.refreshInterval)
+    await this.updateRefreshInterval(settings.music_refreshInterval)
     await this.refreshMusicData()
-  }
-
-  private async handleSettingsUpdate(settings: Settings): Promise<void> {
-    await this.updateRefreshInterval(settings.refreshInterval)
-
-    if (settings.playbackLocation && settings.playbackLocation !== this.currentApp) {
-      Logger.info(`Changing playback source: ${this.currentApp} → ${settings.playbackLocation}`)
-      this.currentApp = settings.playbackLocation
-      await this.refreshMusicData()
-    }
   }
 
   private async findCurrentPlaybackSource(): Promise<string | null> {
@@ -338,9 +338,9 @@ export class MusicService implements MusicStoreClass {
 
     // Try to get from settings
     const settings = await this.settingsStore.getSettings()
-    if (settings?.playbackLocation && settings.playbackLocation !== 'none') {
-      Logger.log(LOGGING_LEVELS.LOG, `Found ${settings.playbackLocation} in settings`)
-      return settings.playbackLocation
+    if (settings?.music_playbackLocation && settings.music_playbackLocation !== 'none') {
+      Logger.log(LOGGING_LEVELS.LOG, `Found ${settings.music_playbackLocation} in settings`)
+      return settings.music_playbackLocation
     }
 
     // Try to find an audio source app automatically
@@ -361,8 +361,8 @@ export class MusicService implements MusicStoreClass {
     if (this.currentApp === 'disabled') {
       Logger.log(LOGGING_LEVELS.LOG, `Music is disabled`)
       const settings = await this.settingsStore.getSettings()
-      if (!settings || settings.refreshInterval > 0) {
-        await this.settingsStore.updateSetting('refreshInterval', -1)
+      if (!settings || settings.music_refreshInterval > 0) {
+        await this.settingsStore.saveSetting('music_refreshInterval', -1)
       }
       return null
     }
@@ -372,7 +372,7 @@ export class MusicService implements MusicStoreClass {
       const app = await this.findCurrentPlaybackSource()
       if (app) {
         this.currentApp = app
-        await this.settingsStore.updateSetting('playbackLocation', app)
+        await this.settingsStore.saveSetting('music_playbackLocation', app)
         return app
       } else {
         Logger.log(LOGGING_LEVELS.ERROR, `No audio source found. Please install an audio app.`)
@@ -383,7 +383,7 @@ export class MusicService implements MusicStoreClass {
     // Handle empty current app
     if (!this.currentApp) {
       const settings = await this.settingsStore.getSettings()
-      const currentApp = settings?.playbackLocation
+      const currentApp = settings?.music_playbackLocation
 
       if (!currentApp) {
         Logger.log(LOGGING_LEVELS.ERROR, `No playback location set in settings`)

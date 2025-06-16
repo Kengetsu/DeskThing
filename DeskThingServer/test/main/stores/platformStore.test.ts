@@ -10,10 +10,11 @@ import {
   DeskThingToDeviceCore,
   ConnectionState,
   ProviderCapabilities,
-  DEVICE_DESKTHING
+  DEVICE_DESKTHING,
+  PlatformIDs
 } from '@deskthing/types'
 import Logger from '@server/utils/logger'
-import { PlatformIDs, PlatformStoreEvent } from '@shared/stores/platformStore'
+import { PlatformStoreEvent } from '@shared/stores/platformStore'
 import { MappingStoreClass } from '@shared/stores/mappingStore'
 
 vi.mock('@server/utils/logger', () => ({
@@ -21,7 +22,21 @@ vi.mock('@server/utils/logger', () => ({
     debug: vi.fn(),
     error: vi.fn(),
     warn: vi.fn(),
-    info: vi.fn()
+    info: vi.fn(),
+    setupSettingsListener: vi.fn()
+  }
+}))
+
+vi.mock('@server/services/files/fileService', () => ({
+  writeToFile: vi.fn(),
+  readFromFile: vi.fn(),
+  readFile: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn(() => '/'),
+    getVersion: vi.fn(() => '0.11.0')
   }
 }))
 
@@ -53,6 +68,7 @@ describe('PlatformStore', () => {
       connected: true,
       timestamp: Date.now(),
       connectionState: ConnectionState.Connected,
+      meta: {},
       primaryProviderId: PlatformIDs.ADB,
       identifiers: {
         [PlatformIDs.ADB]: {
@@ -139,9 +155,10 @@ describe('PlatformStore', () => {
         connectionState: ConnectionState.Connected
       }
 
+      const updatedClient = { ...testClient, ...clientUpdate }
       await platformStore.updateClient(testClient.clientId, clientUpdate)
 
-      expect(mockPlatform.updateClient).toHaveBeenCalledWith(testClient.clientId, clientUpdate)
+      expect(mockPlatform.updateClient).toHaveBeenCalledWith(testClient.clientId, updatedClient, false)
     })
     it('should broadcast data to all clients', async () => {
       const testData: DeskThingToDeviceCore = {

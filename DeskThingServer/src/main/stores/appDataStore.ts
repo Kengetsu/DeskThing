@@ -33,7 +33,8 @@ import EventEmitter from 'node:events'
 
 export class AppDataStore
   extends EventEmitter<AppStoreEvents>
-  implements CacheableStore, AppDataStoreClass {
+  implements CacheableStore, AppDataStoreClass
+{
   private appDataCache: Record<string, AppDataInterface> = {}
 
   private functionTimeouts: Record<string, NodeJS.Timeout> = {}
@@ -107,7 +108,7 @@ export class AppDataStore
         }
         case 'config': {
           Logger.warn(
-            `[handleAppData]: ${data.source} tried accessing "Config" data type which is depreciated and no longer in use!`,
+            `[handleAppData]: ${data.source} tried accessing "Config" data type which is deprecated and no longer in use!`,
             {
               source: 'AppDataStore',
               domain: 'SERVER.' + data.source,

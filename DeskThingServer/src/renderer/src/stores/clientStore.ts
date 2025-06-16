@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { IpcRendererCallback, LoggingData } from '@shared/types'
-import { ClientManifest, Client } from '@deskthing/types'
+import { ClientManifest, Client, PlatformIDs } from '@deskthing/types'
 import useNotificationStore from './notificationStore'
-import { PlatformIDs } from '@shared/stores/platformStore'
 
 interface ClientStoreState {
   connections: number
@@ -17,6 +16,9 @@ interface ClientStoreState {
   requestADBDevices: () => Promise<Client[] | undefined>
   requestConnections: () => Promise<void>
   refreshConnections: () => Promise<boolean>
+  /**
+   * @deprecated - use release store instead for URLs
+   */
   loadClientUrl: (url: string) => Promise<void>
   loadClientZip: (zip: string) => Promise<void>
   updateClientManifest: (client: Partial<ClientManifest>) => void
@@ -104,11 +106,9 @@ const useClientStore = create<ClientStoreState>((set, get) => ({
     window.electron.ipcRenderer.on('clients', handleClientData)
     window.electron.ipcRenderer.on('platform:client', handleNewClient)
 
-    await get().requestConnections()
-    await get().requestADBDevices()
-    await get().requestClientManifest()
+    const clientManifest = await window.electron.client.getClientManifest()
 
-    set({ initialized: true })
+    set({ initialized: true, clientManifest: clientManifest })
   },
 
   requestClientManifest: async (): Promise<Partial<ClientManifest>> => {

@@ -11,14 +11,16 @@ import { PlatformStoreClass } from '@shared/stores/platformStore'
 import { AuthStoreClass } from '@shared/stores/authStore'
 import { ClientStoreClass } from '@shared/stores/clientStore'
 import { UpdateStoreClass } from '@shared/stores/updateStore'
+import { ProfileStoreClass } from '@shared/stores/profileStore'
+import { SupporterStoreClass } from '@shared/stores/supporterStore'
+import { AutoLaunchStoreClass } from '@shared/stores/autoLaunchStore'
+import { GithubStoreClass } from '@shared/stores/githubStore'
 
 // Stores
 
 // import { ExpressServerStoreClass } from '@shared/stores/expressServerStore'
 // import { ExpressServerManager } from './_expressServerStore'
 import logger from '@server/utils/logger'
-import { ProfileStoreClass } from '@shared/stores/profileStore'
-import { SupporterStoreClass } from '@shared/stores/supporterStore'
 
 interface Stores {
   appDataStore: AppDataStoreClass
@@ -35,6 +37,8 @@ interface Stores {
   taskStore: TaskStoreClass
   updateStore: UpdateStoreClass
   supporterStore: SupporterStoreClass
+  autoLaunchStore: AutoLaunchStoreClass
+  githubStore: GithubStoreClass
 }
 
 export class StoreProvider {
@@ -62,7 +66,9 @@ export class StoreProvider {
       platformStore: () => import('./platformStore').then((m) => m.PlatformStore),
       clientStore: () => import('./clientStore').then((m) => m.ClientStore),
       updateStore: () => import('./updateStore').then((m) => m.UpdateStore),
-      supporterStore: () => import('./supporterStore').then((m) => m.SupporterStore)
+      supporterStore: () => import('./supporterStore').then((m) => m.SupporterStore),
+      autoLaunchStore: () => import('./autoLaunchStore').then((m) => m.AutoLaunchStore),
+      githubStore: () => import('./githubStore').then((m) => m.GithubStore)
     }
 
     this.storeInitializers = {
@@ -70,10 +76,12 @@ export class StoreProvider {
       appProcessStore: async () => new (await storeImports.appProcessStore())(),
       authStore: async () =>
         new (await storeImports.authStore())(await this.getStore('settingsStore', false)),
+      releaseStore: async () => new (await storeImports.releaseStore())(),
       appStore: async () =>
         new (await storeImports.appStore())(
           await this.getStore('appProcessStore', false),
-          await this.getStore('authStore', false)
+          await this.getStore('authStore', false),
+          await this.getStore('releaseStore', false)
         ),
       appDataStore: async () =>
         new (await storeImports.appDataStore())(await this.getStore('appStore', false)),
@@ -88,7 +96,6 @@ export class StoreProvider {
           await this.getStore('appDataStore', false),
           await this.getStore('appStore', false)
         ),
-      releaseStore: async () => new (await storeImports.releaseStore())(),
       mappingStore: async () =>
         new (await storeImports.mappingStore())(await this.getStore('appStore', false)),
       musicStore: async () =>
@@ -97,11 +104,15 @@ export class StoreProvider {
           await this.getStore('appStore', false),
           await this.getStore('platformStore', false)
         ),
-      clientStore: async () => new (await storeImports.clientStore())(),
+      clientStore: async () =>
+        new (await storeImports.clientStore())(await this.getStore('releaseStore', false)),
       profileStore: async () =>
         new (await storeImports.profileStore())(await this.getStore('platformStore', false)),
       updateStore: async () => new (await storeImports.updateStore())(),
-      supporterStore: async () => new (await storeImports.supporterStore())()
+      supporterStore: async () => new (await storeImports.supporterStore())(),
+      autoLaunchStore: async () =>
+        new (await storeImports.autoLaunchStore())(await this.getStore('settingsStore', false)),
+      githubStore: async () => new (await storeImports.githubStore())()
     }
 
     this.initialize()

@@ -53,7 +53,8 @@ class ProgressEventBus extends EventEmitter {
       status: ProgressStatus.RUNNING,
       subOperations: new Map(), // will be filled in later
       totalWeight: 0, // will be filled in later
-      startTime: Date.now()
+      startTime: Date.now(),
+      isLoading: true
     }
 
     let totalWeight = 0
@@ -239,23 +240,28 @@ class ProgressEventBus extends EventEmitter {
    * @param operation - the name of the operation only used in the frontend and any following progress updates
    * @param message - the message to be displayed under the operation - usually more details
    * @param metadata - any additional metadata to be stored with the operation
+   * @returns a function to update progress with on the specified channel
    */
   start(
     channel: ProgressChannel,
     operation: string,
     message: string,
     metadata?: Record<string, unknown>
-  ): void {
+  ): (message: string, progress?: number, operation?: string) => void {
     const finalEvent: ProgressEvent = {
       operation,
       status: ProgressStatus.RUNNING,
       message,
       progress: 0,
       metadata,
+      isLoading: true,
       channel
     }
 
     this.emit(channel, finalEvent)
+    return (message: string, progress?: number, operation?: string) => {
+      this.update(channel, message, progress, operation)
+    }
   }
 
   /**
@@ -289,7 +295,7 @@ class ProgressEventBus extends EventEmitter {
    * Increments the progress of a running operation by a given amount
    * @param channel - the channel to increment the progress of
    * @param message - the message to be displayed under the operation - usually more details
-   * @param increment - the amount to increment the progress by
+   * @param increment - the amount to increment the progress by from 0 - 100
    * @param operation - the name of the operation only used in the frontend and any following progress updates
    */
   incrementProgress(
@@ -331,6 +337,7 @@ class ProgressEventBus extends EventEmitter {
       operation,
       status: ProgressStatus.COMPLETE,
       message,
+      isLoading: false,
       progress: 100,
       channel
     }
@@ -350,6 +357,7 @@ class ProgressEventBus extends EventEmitter {
       status: ProgressStatus.ERROR,
       message,
       error,
+      isLoading: false,
       progress: 100,
       channel
     }

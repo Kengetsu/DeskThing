@@ -5,43 +5,46 @@
  * @version 0.10.4
  */
 import { create } from 'zustand'
-import { AppReleaseCommunity, AppReleaseMeta, ClientReleaseMeta } from '@deskthing/types'
-import { IpcRendererCallback } from '@shared/types'
+import {
+  AppLatestServer,
+  ClientLatestServer,
+  IpcRendererCallback,
+  StagedAppManifest
+} from '@shared/types'
+import { ClientManifest } from '@deskthing/types'
 
 interface releaseStoreState {
-  appReleases: AppReleaseMeta[]
-  communityApps: AppReleaseCommunity[]
-  clientReleases: ClientReleaseMeta[]
+  appReleases: AppLatestServer[]
+  clientReleases: ClientLatestServer[]
   initialized: boolean
 
   initialize: () => Promise<void>
-  refreshApp: (repoUrl: string) => Promise<void>
-  refreshData: () => Promise<void>
-  getApps: () => Promise<AppReleaseMeta[]>
-  getAppReferences: () => Promise<AppReleaseCommunity[]>
-  addAppRepo: (repoUrl: string) => Promise<AppReleaseMeta | void>
-  removeAppRepo: (repoUrl: string) => Promise<void>
-  getClients: () => Promise<ClientReleaseMeta[]>
-  setAppReleases: (releases: AppReleaseMeta[]) => void
-  setClientReleases: (releases: ClientReleaseMeta[]) => void
-  setCommunityApps: (apps: AppReleaseCommunity[]) => void
+  refreshReleases: (force?: boolean) => Promise<void>
+  addRepositoryUrl: (
+    repoUrl: string
+  ) => Promise<AppLatestServer[] | ClientLatestServer[] | undefined>
+
+  getApps: () => Promise<AppLatestServer[]>
+  getAppReferences: () => Promise<string[]>
+  removeAppRelease: (appID: string) => Promise<void>
+  downloadApp: (appId: string) => Promise<StagedAppManifest | undefined>
+
+  getClients: () => Promise<ClientLatestServer[]>
+  getClientRepos: () => Promise<string[]>
+  removeClientRelease: (clientId: string) => Promise<void>
+  downloadClient: (clientId: string) => Promise<ClientManifest | undefined>
 }
 
 const useReleaseStore = create<releaseStoreState>((set, get) => ({
   appReleases: [],
   clientReleases: [],
-  communityApps: [],
   initialized: false,
 
   initialize: async () => {
     if (get().initialized) return
 
     const handleAppsUpdate: IpcRendererCallback<'github-apps'> = (_event, data) => {
-      set({ appReleases: Array.isArray(data) ? data : [data] })
-    }
-
-    const handleCommunityUpdate: IpcRendererCallback<'github-community'> = (_event, data) => {
-      set({ communityApps: data })
+      set({ appReleases: data })
     }
 
     const handleClientUpdate: IpcRendererCallback<'github-client'> = (_event, data) => {
@@ -49,67 +52,64 @@ const useReleaseStore = create<releaseStoreState>((set, get) => ({
     }
 
     window.electron.ipcRenderer.on('github-apps', handleAppsUpdate)
-    window.electron.ipcRenderer.on('github-community', handleCommunityUpdate)
     window.electron.ipcRenderer.on('github-client', handleClientUpdate)
 
-    const clients = await window.electron.releases.getClients()
-    const refs = await window.electron.releases.getAppReferences()
-    const apps = await window.electron.releases.getApps()
-
     set({
-      clientReleases: clients,
-      communityApps: refs,
-      appReleases: Array.isArray(apps) ? apps : [apps],
+      clientReleases: [],
+      appReleases: [],
       initialized: true
     })
   },
 
-  refreshApp: async (repoUrl: string): Promise<void> => {
-    await window.electron.releases.refreshApp(repoUrl)
+  refreshReleases: async (force?: boolean): Promise<void> => {
+    await window.electron.releases.refreshReleases({ force })
   },
 
-  refreshData: async (): Promise<void> => {
-    await window.electron.releases.refreshApps()
+  addRepositoryUrl: async (
+    repoUrl: string
+  ): Promise<AppLatestServer[] | ClientLatestServer[] | undefined> => {
+    const latestServer = await window.electron.releases.addRepositoryUrl(repoUrl)
+    return latestServer
   },
 
-  getApps: async (): Promise<AppReleaseMeta[]> => {
+  getApps: async (): Promise<AppLatestServer[]> => {
     const apps = await window.electron.releases.getApps()
-    const appsArray = Array.isArray(apps) ? apps : [apps]
-    set({ appReleases: appsArray })
-    return appsArray
+    set({ appReleases: apps })
+    return apps
   },
 
-  getAppReferences: async (): Promise<AppReleaseCommunity[]> => {
-    const references = await window.electron.releases.getAppReferences()
-    set({ communityApps: references })
+  getAppReferences: async (): Promise<string[]> => {
+    const references = await window.electron.releases.getAppRepositories()
     return references
   },
 
-  addAppRepo: async (repoUrl: string): Promise<AppReleaseMeta | void> => {
-    const app = await window.electron.releases.addAppRepo(repoUrl)
-    return app
-  },
-
-  removeAppRepo: async (repoUrl: string): Promise<void> => {
+  removeAppRelease: async (repoUrl: string): Promise<void> => {
     await window.electron.releases.removeAppRepo(repoUrl)
   },
 
-  getClients: async (): Promise<ClientReleaseMeta[]> => {
+  downloadApp: async (appId: string): Promise<StagedAppManifest | undefined> => {
+    const app = await window.electron.releases.downloadApp(appId)
+    return app
+  },
+
+  getClients: async (): Promise<ClientLatestServer[]> => {
     const clients = await window.electron.releases.getClients()
     set({ clientReleases: clients })
     return clients
   },
 
-  setAppReleases: (releases: AppReleaseMeta[]): void => {
-    set({ appReleases: releases })
+  getClientRepos: async (): Promise<string[]> => {
+    const client = await window.electron.releases.getClientRepositories()
+    return client
   },
 
-  setClientReleases: (releases: ClientReleaseMeta[]): void => {
-    set({ clientReleases: releases })
+  removeClientRelease: async (repoUrl: string): Promise<void> => {
+    await window.electron.releases.removeClientRepo(repoUrl)
   },
 
-  setCommunityApps: (apps: AppReleaseCommunity[]): void => {
-    set({ communityApps: apps })
+  downloadClient: async (clientId: string): Promise<ClientManifest | undefined> => {
+    const client = await window.electron.releases.downloadClient(clientId)
+    return client
   }
 }))
 

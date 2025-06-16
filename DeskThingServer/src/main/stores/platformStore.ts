@@ -16,11 +16,11 @@ import {
   ConnectionState,
   TagTypes,
   App,
-  ProviderCapabilities
+  ProviderCapabilities,
+  PlatformIDs
 } from '@deskthing/types'
 import Logger from '@server/utils/logger'
 import {
-  PlatformIDs,
   PlatformStoreClass,
   PlatformStoreEvent,
   PlatformStoreEvents
@@ -116,10 +116,16 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
       if (!settings?.data) return
 
       isValidAppSettings(settings.data)
+
+      const combinedPayload: { settings: AppSettings; app: string } = {
+        settings: settings.data,
+        app: settings.appId
+      }
+
       this.broadcastToClients({
         app: 'client',
         type: DESKTHING_DEVICE.SETTINGS,
-        payload: settings.data
+        payload: combinedPayload
       })
     })
 
@@ -297,7 +303,7 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
   getClients(): Client[] {
     // Remove clients without any providers
     for (const client of this.clientRegistry.values()) {
-      if (!client.primaryProviderId && !client.identifiers?.length) {
+      if (!client.primaryProviderId && !Object.values(client.identifiers).length) {
         Logger.debug(`Removing client ${client.clientId} as it has no providers`, {
           domain: 'platformStore',
           function: 'getClients',
@@ -451,44 +457,19 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
       })
       return
     }
-    // Update the client in the platform
-    platform.updateClient(clientId, clientUpdates)
 
-    // Also update our registry with the merged data
-    const updatedClient = { ...existingClient, ...clientUpdates } as Client
-
-    // If we have identifiers, recalculate the primary provider
-    if (Object.values(updatedClient.identifiers).length > 0) {
-      const providers = Object.values(updatedClient.identifiers).filter((id) => id.active)
-      const primaryProvider = providers.sort(
-        (a, b) =>
-          this.calculateCapabilityScore(b.capabilities) -
-          this.calculateCapabilityScore(a.capabilities)
-      )[0]
-
-      if (primaryProvider) {
-        updatedClient.connected = true
-        updatedClient.primaryProviderId = primaryProvider.providerId
-        updatedClient.timestamp = Date.now()
-        updatedClient.connectionState = ConnectionState.Connected
-      } else {
-        updatedClient.connected = false
-        updatedClient.connectionState = ConnectionState.Disconnected
-        delete updatedClient.primaryProviderId
-      }
-    }
-
+    const updatedClient = ClientIdentificationService.mergeClients(
+      existingClient,
+      clientUpdates as Client
+    )
     // Update the registry
     this.clientRegistry.set(existingClient.clientId, updatedClient)
 
     // Notify other platforms about the update
     this.platforms.forEach((p) => {
-      if (p.id !== platform.id) {
-        // Only update other platforms that have this client
-        const platformClient = p.getClientById(clientId)
-        if (platformClient) {
-          p.updateClient(clientId, updatedClient)
-        }
+      // Only update other platforms that have this client
+      if (Object.keys(updatedClient.identifiers).includes(p.id)) {
+        p.updateClient(clientId, updatedClient, false)
       }
     })
 
@@ -556,7 +537,8 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
       const updatedClient: Client = {
         ...client,
         connected: updatedState?.connected ?? client.connected,
-        connectionState: updatedState?.connectionState ?? client.connectionState,
+        connectionState:
+          updatedState?.connectionState ?? client.connectionState ?? ConnectionState.Established,
         primaryProviderId: primaryProvider.providerId,
         timestamp: Date.now()
       }
@@ -642,7 +624,7 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
       function: 'handleSocketData'
     })
 
-    handlePlatformMessage(platform, client, data)
+    await handlePlatformMessage(platform, client, data)
     if (registeredClient && registeredClient.primaryProviderId) {
       this.emit(PlatformStoreEvent.DATA_RECEIVED, {
         client: registeredClient as Extract<Client, { connected: true }>,
@@ -761,9 +743,6 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
         source: 'platformStore',
         function: 'clientConnected'
       })
-
-      // Send data to that client
-      this.sendInitialDataToClient(client.clientId)
     })
 
     // Disconnection
@@ -813,6 +792,12 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
 
     // Client Updated
     platform.on(PlatformEvent.CLIENT_UPDATED, (client) => {
+      Logger.info(`Client ${client.clientId} is updating via ${platform.id}`, {
+        domain: 'platform',
+        source: 'platformStore',
+        function: 'clientUpdated'
+      })
+
       this.handleClientUpdate(platform, client)
 
       Logger.info(`Client ${client.clientId} updated via ${platform.id}`, {
@@ -903,9 +888,9 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
         this.addClientPlatformMapping(identifier.id, platform.id)
       }
 
-      // Notify platforms about the merged client
       this.platforms.forEach((p) => {
-        if (p.id !== platform.id) {
+        // Only update other platforms that have this client
+        if (Object.keys(mergedClient.identifiers).includes(p.id)) {
           p.updateClient(existingClientId, mergedClient, false)
         }
       })
@@ -914,7 +899,7 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
       this.emit(PlatformStoreEvent.CLIENT_UPDATED, mergedClient)
 
       // If the client wasn't connected before but is now, send initial data
-      if (!wasConnected && mergedClient.connected) {
+      if (!wasConnected && mergedClient.connectionState == ConnectionState.Connected) {
         Logger.debug(`Client ${mergedClient.clientId} connected. Sending initial data`, {
           domain: 'platform',
           source: 'platformStore',
@@ -932,7 +917,7 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
       // This is a new client
       const newClient = {
         ...client,
-        connectionState: client.connected ? ConnectionState.Connected : ConnectionState.Disconnected
+        connectionState: client.connectionState
       }
 
       this.clientRegistry.set(client.clientId, newClient)
@@ -967,7 +952,7 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
     try {
       const appData = await this.appStore.getAll()
       const filteredAppData = appData.filter(
-        (app) => !app.manifest?.tags.includes(TagTypes.UTILITY_ONLY)
+        (app) => !(app.manifest?.tags.includes(TagTypes.UTILITY_ONLY) ?? false)
       )
 
       if (clientId) {
@@ -1207,10 +1192,12 @@ export class PlatformStore extends EventEmitter<PlatformStoreEvents> implements 
     await this.sendTimeToClient(clientId)
     await this.sendManifestRequest(clientId)
 
-    const apps = this.appStore.getAll()
-    await this.sendAppsToClient(apps, clientId)
     if (clientId) {
       await this.sendclientIdToClient(clientId)
+
+      // Also send the current song
+      const musicStore = await storeProvider.getStore('musicStore')
+      await musicStore.sendMusicToClient(clientId)
     }
   }
 }

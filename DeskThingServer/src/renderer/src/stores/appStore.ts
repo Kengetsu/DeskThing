@@ -1,4 +1,4 @@
-import { App, AppReleaseSingleMeta, AppSettings, SavedData } from '@deskthing/types'
+import { App, AppLatestJSONLatest, AppSettings, SavedData } from '@deskthing/types'
 import { IpcRendererCallback, LoggingData, StagedAppManifest } from '@shared/types'
 import { create } from 'zustand'
 import useSettingsStore from './settingsStore'
@@ -16,9 +16,14 @@ interface AppStoreState {
   clearIconCache: () => void
   requestApps: () => void
   removeAppFromList: (appName: string) => void
+  /**
+   * @deprecated - use releaseStore instead
+   * @param data
+   * @returns
+   */
   addApp: (data: {
     appPath?: string
-    releaseMeta?: AppReleaseSingleMeta
+    releaseMeta?: AppLatestJSONLatest
   }) => Promise<StagedAppManifest | void>
   runStagedApp: (overwrite?: boolean) => Promise<void>
   setOrder: (order: string[]) => void
@@ -33,6 +38,7 @@ interface AppStoreState {
   setAppData: (appName: string, data: SavedData) => void
   getAppSettings: (appName: string) => Promise<AppSettings | null>
   setAppSettings: (appName: string, settings: AppSettings) => void
+  setStagedManifest: (manifest: StagedAppManifest | null) => void
   setAppList: (apps: App[]) => void
   getIcon: (appName: string, icon?: string) => Promise<string | null>
   getIconUrl: (appName: string, icon?: string) => string
@@ -73,11 +79,13 @@ const useAppStore = create<AppStoreState>((set, get) => ({
 
     // Set up the event listener for app-data updates
     const handleAppData: IpcRendererCallback<'app-data'> = (_event, response) => {
-      set({ appsList: response })
+      const filteredApps = response.filter((app) => app != undefined)
+
+      set({ appsList: filteredApps })
 
       // Update order if needed
       const { order } = get()
-      const missingApps = response.filter((app) => !order.includes(app.name))
+      const missingApps = filteredApps.filter((app) => !order.includes(app.name))
       if (missingApps.length > 0) {
         set({ order: [...order, ...missingApps.map((app) => app.name)] })
       }
@@ -88,9 +96,11 @@ const useAppStore = create<AppStoreState>((set, get) => ({
 
     // Fetch initial data
     const apps = await window.electron.app.get()
+
+    const filteredApps = apps.filter((app) => app != undefined)
     set({
-      appsList: apps,
-      order: apps.map((app) => app.name),
+      appsList: filteredApps,
+      order: filteredApps.map((app) => app.name),
       initialized: true
     })
   },
@@ -98,7 +108,9 @@ const useAppStore = create<AppStoreState>((set, get) => ({
   // Requests the apps from Electron via IPC
   requestApps: async (): Promise<void> => {
     const apps = await window.electron.app.get() // Assuming this is wrapped in a promise
-    set({ appsList: apps, order: apps.map((app) => app.name), iconCache: {} })
+    const filteredApps = apps.filter((app) => app != undefined)
+
+    set({ appsList: filteredApps, order: filteredApps.map((app) => app.name), iconCache: {} })
   },
 
   // Sets the entire list of apps
@@ -186,12 +198,16 @@ const useAppStore = create<AppStoreState>((set, get) => ({
     window.electron.app.setSettings(appName, settings)
   },
 
+  setStagedManifest: (manifest: StagedAppManifest | null): void => {
+    set({ stagedManifest: manifest })
+  },
+
   addApp: async ({
     appPath,
     releaseMeta
   }: {
     appPath?: string
-    releaseMeta?: AppReleaseSingleMeta
+    releaseMeta?: AppLatestJSONLatest
   }): Promise<StagedAppManifest | void> => {
     const loggingListener = async (_event: Electron.Event, reply: LoggingData): Promise<void> => {
       set({ logging: reply })
@@ -246,7 +262,7 @@ const useAppStore = create<AppStoreState>((set, get) => ({
 
   getIconUrl: (appName: string, icon?: string): string => {
     const settings = useSettingsStore.getState().settings
-    const url = `http://localhost:${settings.devicePort}/icons/${appName}/icons/${icon || appName}.svg`
+    const url = `http://localhost:${settings.device_devicePort}/icons/${appName}/icons/${icon || appName}.svg`
     return url
   }
 }))

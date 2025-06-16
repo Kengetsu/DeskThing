@@ -26,7 +26,8 @@ export async function initializeStores(): Promise<void> {
     AppDataStore: await storeProvider.getStore('appDataStore', false),
     updateStore: await storeProvider.getStore('updateStore', false),
     clientStore: await storeProvider.getStore('clientStore', false),
-    profileStore: await storeProvider.getStore('profileStore', true)
+    profileStore: await storeProvider.getStore('profileStore', true),
+    autoLaunchStore: await storeProvider.getStore('autoLaunchStore', true)
   }
 
   const platformStore = await storeProvider.getStore('platformStore', false)
@@ -96,15 +97,26 @@ export async function initializeStores(): Promise<void> {
       payload: clients
     })
   })
-  storeList.releaseStore.on('community', (community) => {
-    Logger.debug('[INDEX]: Sending updated community information with type github-community')
+  storeList.releaseStore.on('appRepos', (appRepos) => {
+    Logger.debug(
+      `[INDEX]: Sending ${appRepos?.length} app repos information with type github-app-repos`
+    )
     uiEventBus.sendIpcData({
-      type: 'github-community',
-      payload: community
+      type: 'github-app-repos',
+      payload: appRepos
+    })
+  })
+  storeList.releaseStore.on('clientRepos', (clientRepos) => {
+    Logger.debug(
+      `[INDEX]: Sending ${clientRepos?.length} client repos with type github-client-repos`
+    )
+    uiEventBus.sendIpcData({
+      type: 'github-client-repos',
+      payload: clientRepos
     })
   })
 
-  storeList.settingsStore.addListener((newSettings) => {
+  storeList.settingsStore.addSettingsListener((newSettings) => {
     uiEventBus.sendIpcData({
       type: 'settings-updated',
       payload: newSettings
@@ -152,7 +164,7 @@ export async function initializeStores(): Promise<void> {
     (data) => {
       if (data.request != 'input') return
       Logger.warn(
-        `[handleRequestGetInput]: ${data.source} tried accessing "Input" data type which is depreciated and may be removed at any time!`,
+        `[handleRequestGetInput]: ${data.source} tried accessing "Input" data type which is deprecated and may be removed at any time!`,
         {
           source: 'appCommunication',
           function: 'handleRequestGetInput',

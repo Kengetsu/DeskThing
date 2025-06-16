@@ -34,13 +34,13 @@ class Logger {
   }
 
   public setupSettingsListener = async (settingsStore: SettingsStoreClass): Promise<void> => {
-    const settings = await settingsStore.getSettings()
-    if (settings) {
-      this.logLevel = settings?.logLevel || LOG_FILTER.INFO
+    const logLevel = await settingsStore.getSetting('server_LogLevel')
+    if (logLevel) {
+      this.logLevel = logLevel || LOG_FILTER.INFO
     }
 
-    settingsStore.addListener((settings) => {
-      this.logLevel = settings?.logLevel || LOG_FILTER.INFO
+    settingsStore.on('server_LogLevel', (loggingLevel) => {
+      this.logLevel = loggingLevel || LOG_FILTER.INFO
     })
   }
 
@@ -144,6 +144,18 @@ class Logger {
 
   public debug = async (message: string, options?: LoggingOptions): Promise<void> => {
     this.log(LOGGING_LEVELS.DEBUG, message, options)
+  }
+
+  /**
+   * Creates a debug function with the given options
+   * @param options The options to use for the debug function
+   * @returns The debug function
+   */
+  public createLogger = (
+    level: LOGGING_LEVELS,
+    options: LoggingOptions
+  ): ((message: string) => void) => {
+    return (message: string) => this.log(level, message, options)
   }
 
   public fatal = async (message: string, options?: LoggingOptions): Promise<void> => {

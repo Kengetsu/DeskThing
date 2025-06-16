@@ -1,10 +1,9 @@
 import React, { useState } from 'react'
-import { Client, ConnectionState } from '@deskthing/types'
+import { Client, ConnectionState, PlatformIDs } from '@deskthing/types'
 import { IconConfig, IconRefresh, IconUpload } from '@renderer/assets/icons'
 import Button from '../../Button'
 import usePlatformStore from '@renderer/stores/platformStore'
 import { useClientStore, useSettingsStore } from '@renderer/stores'
-import { PlatformIDs } from '@shared/stores/platformStore'
 
 interface ADBControlsProps {
   client: Client
@@ -14,13 +13,13 @@ interface ADBControlsProps {
 const ADBControls: React.FC<ADBControlsProps> = ({ client, isLoading }) => {
   const [animatingIcons, setAnimatingIcons] = useState<Record<string, boolean>>({})
   const refreshADbClients = useClientStore((store) => store.requestADBDevices)
-  const devicePort = useSettingsStore((store) => store.settings.devicePort)
+  const devicePort = useSettingsStore((store) => store.settings.device_devicePort)
 
   const sendCommand = usePlatformStore((state) => state.runCommand)
   const configure = usePlatformStore((state) => state.configure)
   const pushStaged = usePlatformStore((state) => state.pushStaged)
 
-  const adbId = client.identifiers[PlatformIDs.ADB]?.id
+  const adbId = client.identifiers[PlatformIDs.ADB]?.id || client.meta.adb?.adbId
 
   const handleAdbCommand = async (command: string): Promise<string | undefined> => {
     if (!adbId) return
@@ -53,7 +52,7 @@ const ADBControls: React.FC<ADBControlsProps> = ({ client, isLoading }) => {
 
   // Determine device state
   const needsConfiguration =
-    client.connectionState === ConnectionState.Established && !client.manifest?.context?.ip
+    client.connectionState === ConnectionState.Established && !client.identifiers.websocket?.active
 
   const isOffline = client.connectionState === ConnectionState.Failed
 

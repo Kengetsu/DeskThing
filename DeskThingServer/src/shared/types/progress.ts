@@ -33,13 +33,12 @@ export enum ProgressChannel {
   CLIENT_MANIFEST = 'client-manifest',
   /** Pushes the staged client */
   CONFIGURE_DEVICE = 'configure-device',
-  PUSH_PROXY_SCRIPT = 'push-proxy-script',
+  PUSH_SCRIPT = 'push-script',
   REFRESH_DEVICES = 'refresh-devices',
-  
+
   /** The channel for all platform-related events */
   PLATFORM_CHANNEL = 'ipc-platform-channel',
-  
-  
+
   /** The channel for all platform-related events */
   REFRESH_RELEASES = 'refresh-releases',
   REFRESH_CLIENTS = 'refresh-clients',
@@ -49,6 +48,23 @@ export enum ProgressChannel {
   GET_CLIENT_RELEASES = 'get-client-releases',
   GET_APP_RELEASES = 'get-app-releases',
   PROCESS_APP_RELEASES = 'process-app-releases',
+
+  // Release Functions
+  ST_RELEASE_REFRESH = 'st-release-refresh',
+  ST_RELEASE_ADD_REPO = 'st-releasae-add-repo',
+  ST_RELEASE_APP_REMOVE = 'st-releasae-app-remove',
+  ST_RELEASE_APP_DOWNLOAD = 'st-release-app-download',
+  FN_RELEASE_ADD_REPO = 'fn-releasae-add-repo',
+  FN_RELEASE_APP_REFRESH = 'fn-release-app-refresh',
+  FN_RELEASE_APP_MIGRATE = 'fn-release-app-migrate',
+  FN_RELEASE_APP_STATS = 'fn-release-app-stats',
+  ST_RELEASE_CLIENT_REMOVE = 'st-releasae-client-remove',
+  ST_RELEASE_APP_REFRESH = 'st-release-app-refresh',
+  ST_RELEASE_CLIENT_REFRESH = 'st-release-client-refresh',
+  ST_RELEASE_CLIENT_DOWNLOAD = 'st-release-client-download',
+  FN_RELEASE_CLIENT_REFRESH = 'fn-release-client-refresh',
+  FN_RELEASE_CLIENT_MIGRATE = 'fn-release-client-migrate',
+  FN_RELEASE_CLIENT_STATS = 'fn-release-client-stats',
 
   // Top-Level routines
 

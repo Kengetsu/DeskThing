@@ -16,7 +16,7 @@ const ClientConnections: React.FC = () => {
   const setPage = usePageStore((pageStore) => pageStore.setPage)
 
   // Visibility States
-  const [_searchParams, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // Refreshing ADB Devices
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -62,12 +62,15 @@ const ClientConnections: React.FC = () => {
 
   // Functions
   const openQr = (): void => {
-    setSearchParams({ qr: 'true' })
+    searchParams.set('qr', 'true')
+    setSearchParams(searchParams)
   }
 
   // Functions
   const openSetup = (): void => {
-    setSearchParams({ setup: 'true', page: 'adb' })
+    searchParams.set('setup', 'true')
+    searchParams.set('page', 'adb')
+    setSearchParams(searchParams)
   }
 
   const handleDownloadsNav = (): void => {
@@ -89,10 +92,10 @@ const ClientConnections: React.FC = () => {
       <Sidebar className="flex justify-between flex-col h-full md:items-stretch xs:items-center">
         <div>
           <div className="md:block xs:hidden block">
-            {settings.localIp &&
-              settings.localIp.map((ip, index) => (
+            {settings.server_localIp &&
+              settings.server_localIp.map((ip, index) => (
                 <div key={index} className="text-gray-500">
-                  {ip + ':' + settings.devicePort}
+                  {ip + ':' + settings.device_devicePort}
                 </div>
               ))}
             <div className="border-t border-gray-500 mt-4 pt-4">
